@@ -1,0 +1,58 @@
+=== Movie Recommendation System Log 2025-06-18 22:52:57.809512 ===
+2025-06-18 22:52:57 - INFO - Application starting
+2025-06-18 22:52:57 - INFO - Loading dataframe from C:\Users\siril\OneDrive\Desktop\deployment_version\df.csv
+2025-06-18 22:54:51 - INFO - Successfully loaded dataframe with 25000095 rows from df.csv
+2025-06-18 22:54:52 - INFO - Cluster distribution: {3: 10257451, 0: 4975846, 1: 3309508, 2: 2037992, 6: 1881757, 4: 1718237, 5: 483652, 8: 322133, 7: 13519}
+2025-06-18 22:56:18 - INFO - Feature matrix prepared for recommendations
+2025-06-18 22:56:19 - INFO - Starting server on port 3000
+2025-06-18 22:56:19 - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:3000
+ * Running on http://192.168.1.5:3000
+2025-06-18 22:56:19 - INFO - [33mPress CTRL+C to quit[0m
+2025-06-18 22:56:40 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:40] "GET / HTTP/1.1" 200 -
+2025-06-18 22:56:41 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:41] "[33mGET /static/moviejs.js HTTP/1.1[0m" 404 -
+2025-06-18 22:56:41 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:41] "[36mGET /styles.css HTTP/1.1[0m" 304 -
+2025-06-18 22:56:41 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:41] "[36mGET /home-search.js HTTP/1.1[0m" 304 -
+2025-06-18 22:56:41 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:41] "OPTIONS /api-status?_=1750267601309 HTTP/1.1" 200 -
+2025-06-18 22:56:41 - INFO - API status endpoint accessed
+2025-06-18 22:56:41 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:41] "GET /api-status?_=1750267601309 HTTP/1.1" 200 -
+2025-06-18 22:56:53 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:53] "GET /search-results.html?q=Horror&_=1750267613887 HTTP/1.1" 200 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "[36mGET /styles.css HTTP/1.1[0m" 304 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "[36mGET /static/css/search-results.css HTTP/1.1[0m" 304 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "[36mGET /static/css/dropdown-fix.css HTTP/1.1[0m" 304 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "[36mGET /static/js/moviejs.js HTTP/1.1[0m" 304 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "[36mGET /static/js/search-results.js HTTP/1.1[0m" 304 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "OPTIONS /api-status?_=1750267614086 HTTP/1.1" 200 -
+2025-06-18 22:56:54 - INFO - API status endpoint accessed
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "GET /api-status?_=1750267614086 HTTP/1.1" 200 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "OPTIONS /search?q=Horror&genre=Horror&_=1750267614406 HTTP/1.1" 200 -
+2025-06-18 22:56:54 - INFO - 127.0.0.1 - - [18/Jun/2025 22:56:54] "OPTIONS /search?q=Horror&genre=Horror&_=1750267614407 HTTP/1.1" 200 -
+2025-06-18T22:56:54.732120 - genre search for: Horror
+2025-06-18 22:56:54 - INFO - Genre Search: 'Horror'
+2025-06-18 22:56:54 - INFO - Performing genre search for: Horror
+2025-06-18T22:57:05.275833 - genre search for: Horror
+2025-06-18 22:57:05 - INFO - Genre Search: 'Horror'
+2025-06-18 22:57:05 - INFO - Performing genre search for: Horror
+2025-06-18 22:58:55 - INFO - Found 1892183 exact genre matches for: Horror
+2025-06-18 22:58:55 - INFO - Found 1892183 exact genre matches for: Horror
+2025-06-18 22:58:55 - WARNING - Genre search timed out after 15 seconds, limiting results
+2025-06-18 22:58:55 - WARNING - Genre search timed out after 15 seconds, limiting results
+2025-06-18 22:58:55 - INFO - Returning 100 movies matching genre: Horror
+2025-06-18 22:58:55 - INFO - Returning 100 movies matching genre: Horror
+2025-06-18 22:58:55 - INFO - Cached results for genre: Horror
+2025-06-18 22:58:55 - INFO - Cached results for genre: Horror
+2025-06-18 22:58:55 - INFO - 127.0.0.1 - - [18/Jun/2025 22:58:55] "GET /search?q=Horror&genre=Horror&_=1750267614407 HTTP/1.1" 200 -
+2025-06-18 22:58:55 - INFO - 127.0.0.1 - - [18/Jun/2025 22:58:55] "GET /search?q=Horror&genre=Horror&_=1750267614406 HTTP/1.1" 200 -
+2025-06-18 23:00:09 - INFO - 127.0.0.1 - - [18/Jun/2025 23:00:09] "OPTIONS /search?q=Cabin%20in%20the%20Woods%20The%202012&title=Cabin%20in%20the%20Woods%20The%202012&recommend=true&_=1750267808930 HTTP/1.1" 200 -
+2025-06-18T23:00:09.551465 - recommendation search for: Cabin in the Woods The 2012
+2025-06-18 23:00:09 - INFO - Search: 'Cabin in the Woods The 2012', Get recommendations: True
+2025-06-18 23:00:09 - INFO - Getting recommendations for: Cabin in the Woods The 2012
+2025-06-18 23:00:30 - INFO - Found movie: Cabin in the Woods The 2012
+2025-06-18 23:00:30 - INFO - Original movie genres: ["['Comedy', 'Horror', 'Sci-Fi', 'Thriller']"]
+2025-06-18 23:00:30 - INFO - Calculating cosine similarities
+2025-06-18 23:00:30 - INFO - Using subset of 100000 movies for similarity calculation
+2025-06-18 23:00:34 - ERROR - Error in content-based recommendation: bad character range i-F at position 24
+2025-06-18 23:00:34 - INFO - Using cluster-based recommendation for cluster 6
+2025-06-18 23:00:37 - INFO - Returning 10 unique cluster-based recommendations
+2025-06-18 23:00:37 - INFO - 127.0.0.1 - - [18/Jun/2025 23:00:37] "GET /search?q=Cabin%20in%20the%20Woods%20The%202012&title=Cabin%20in%20the%20Woods%20The%202012&recommend=true&_=1750267808930 HTTP/1.1" 200 -
