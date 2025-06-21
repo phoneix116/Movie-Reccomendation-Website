@@ -124,7 +124,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgements
 
-- [MovieLens](https://movielens.org/) - For the dataset
+- [Kaggle]([https://movielens.org/](https://www.kaggle.com/datasets/parasharmanas/movie-recommendation-system)) - For the dataset
 - [scikit-learn](https://scikit-learn.org/) - For machine learning algorithms
 - [Flask](https://flask.palletsprojects.com/) - For the web framework
 
