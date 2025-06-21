@@ -1,0 +1,372 @@
+/* CSS for the Movie Recommendation App */
+/* This CSS file styles the Movie Recommendation App, including the header, hero section, search box, movie grid, and footer. */
+/* Global styles */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #000;
+            color: #f5f5f7;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        /* Header styles */
+        header {
+            background-color: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .brand {
+            color: #f5f5f7;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .brand span {
+            background: linear-gradient(90deg, #007aff, #00c7be);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        nav {
+            display: flex;
+        }
+
+        nav a {
+            color: #f5f5f7;
+            text-decoration: none;
+            margin-right: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+            opacity: 0.8;
+        }
+
+        nav a:hover {
+            opacity: 1;
+        }
+
+        .logout-btn {
+            color: #007aff;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: opacity 0.2s ease;
+        }
+
+        .logout-btn:hover {
+            opacity: 0.8;
+        }
+
+        /* Hero section */
+        .hero {
+            background: linear-gradient(to bottom, #000, #111);
+            padding: 80px 24px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+            background: linear-gradient(90deg, #fff, #aaa);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .hero p {
+            font-size: 22px;
+            max-width: 600px;
+            margin: 0 auto 40px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 300;
+        }        /* Search section */
+        .search-container {
+            max-width: 650px;
+            margin: -82px auto 0;
+            padding: 0 24px 40px;
+            
+        }
+
+        .search-box {
+            display: flex;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .search-box:focus-within {
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            color: #fff;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .search-box button {
+            padding: 16px 24px;
+            background: #007aff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .search-box button:hover {
+            background: #0058b9;
+        }
+
+        /* Content section */
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .content-header h2 {
+            font-size: 28px;
+            font-weight: 500;
+            letter-spacing: -0.5px;
+        }
+
+        .recommendation-btn {
+            background: rgba(0, 122, 255, 0.1);
+            color: #007aff;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .recommendation-btn:hover {
+            background: rgba(0, 122, 255, 0.2);
+        }
+
+        /* Movie grid */
+        .movie-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 24px;
+        }
+
+        .movie-card {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .movie-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .movie-poster {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .movie-card:hover .movie-poster {
+            transform: scale(1.05);
+        }
+
+        .movie-info {
+            padding: 16px;
+        }
+
+        .movie-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .movie-year {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            margin-bottom: 8px;
+            font-weight: 300;
+        }
+
+        .movie-genres {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 16px;
+            font-weight: 300;
+        }
+
+        .rate-button {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: none;
+            padding: 8px 0;
+            border-radius: 18px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 14px;
+            font-weight: 400;
+            transition: all 0.2s ease;
+        }
+
+        .rate-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Add styles for the recommend-similar button */
+        .recommend-similar {
+            background-color: #0071e3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            font-weight: 500;
+        }
+
+        .recommend-similar:hover {
+            background-color: #0077ed;
+        }
+
+        /* Loading and Error states */
+        .loading, .error {
+            width: 100%;
+            padding: 40px;
+            text-align: center;
+            color: #f5f5f7;
+            background-color: #1a1a1a;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-size: 18px;
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        .error {
+            color: #ff6b6b;
+            border: 1px solid #ff6b6b;
+            padding: 20px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        /* Footer */
+        footer {
+            background: #111;
+            padding: 40px 24px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        footer a {
+            color: #007aff;
+            text-decoration: none;
+            transition: opacity 0.2s ease;
+        }
+
+        footer a:hover {
+            opacity: 0.8;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .movie-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 16px;
+            }
+            
+            .content-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .recommendation-btn {
+                margin-top: 16px;
+            }
+
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .hero p {
+                font-size: 18px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .movie-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            }
+            
+            .movie-poster {
+                height: 200px;
+            }
+
+            .hero h1 {
+                font-size: 28px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+        }

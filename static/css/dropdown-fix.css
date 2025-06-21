@@ -1,0 +1,68 @@
+/* Custom dropdown styles to ensure dark theme across browsers */
+.dark-select {
+    background-color: rgba(20, 20, 20, 0.95) !important;
+    color: white !important;
+    border: 1px solid rgba(100, 100, 100, 0.6) !important;
+    border-radius: 12px !important;
+    padding: 12px 20px !important;
+    height: 48px !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 10px center !important;
+    padding-right: 40px !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.dark-select:hover {
+    background-color: rgba(40, 40, 40, 0.9) !important;
+    border-color: rgba(100, 100, 100, 0.7) !important;
+}
+
+.dark-select option {
+    background-color: #1c1c1e !important;
+    color: white !important;
+    padding: 12px !important;
+    font-weight: normal !important;
+    border-bottom: 1px solid rgba(100, 100, 100, 0.3) !important;
+}
+
+/* For Firefox */
+.dark-select:-moz-focusring {
+    color: transparent !important;
+    text-shadow: 0 0 0 #fff !important;
+}
+
+/* For Chrome/Safari */
+.dark-select::-ms-expand {
+    display: none !important;
+}
+
+@supports (-webkit-appearance: none) or (-moz-appearance: none) or (appearance: none) {
+    .dark-select {
+        -webkit-appearance: none !important;
+        -moz-appearance: none !important;
+        appearance: none !important;
+    }
+}
+
+/* For webkit browsers to style dropdown menu */
+@media screen and (-webkit-min-device-pixel-ratio:0) { 
+    .dark-select {
+        background-color: rgba(20, 20, 20, 0.9) !important;
+    }
+    
+    .dark-select option:checked {
+        background: linear-gradient(0deg, #007aff 0%, #007aff 100%) !important;
+        color: white !important;
+    }
+}
+
+/* Active/open state styling */
+.dark-select.active {
+    border-color: #007aff !important;
+    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.3) !important;
+}

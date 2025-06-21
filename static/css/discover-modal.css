@@ -1,0 +1,143 @@
+/* Additional styles for discover.html */
+.genre-section {
+    margin-bottom: 40px;
+}
+
+.genre-section h3 {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #fff;
+    font-weight: 500;
+}
+
+/* Modal styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    overflow: auto;
+}
+
+.modal-content {
+    background-color: #1a1a1a;
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 80%;
+    max-width: 600px;
+    box-shadow: 0 5px 30px rgba(0, 0, 0, 0.3);
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.close-modal {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: #fff;
+}
+
+.modal h2 {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    color: #fff;
+    font-size: 24px;
+}
+
+.modal p {
+    margin-bottom: 20px;
+    color: #ddd;
+}
+
+.modal-search {
+    display: flex;
+    margin-bottom: 30px;
+}
+
+.modal-search input {
+    flex: 1;
+    padding: 12px 15px;
+    border-radius: 6px 0 0 6px;
+    border: none;
+    background-color: #333;
+    color: #fff;
+    font-size: 16px;
+}
+
+.modal-search button {
+    padding: 12px 20px;
+    background: linear-gradient(90deg, #007aff, #00c7be);
+    color: white;
+    border: none;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.modal-search button:hover {
+    opacity: 0.9;
+}
+
+.popular-recommendations h3 {
+    margin-bottom: 15px;
+    color: #ddd;
+    font-weight: 500;
+    font-size: 18px;
+}
+
+.popular-movies {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.popular-movie {
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.popular-movie:hover {
+    background-color: rgba(0, 122, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.popular-movie-clicked {
+    background-color: rgba(0, 122, 255, 0.4);
+    transform: scale(0.98);
+}
+
+/* Loading animation */
+.loading {
+    text-align: center;
+    padding: 30px;
+    color: #888;
+}
+
+/* Error message */
+.error {
+    text-align: center;
+    color: #ff6b6b;
+    padding: 20px;
+    background-color: rgba(255, 107, 107, 0.1);
+    border-radius: 8px;
+}
