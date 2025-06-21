@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CineVision - Discover Great Films</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>    <header>
+        <div class="brand">Cine<span>Vision</span></div>        <nav>
+            <a href="#" class="active">Home</a>
+            <a href="discover.html">Discover</a>
+        </nav>
+        <a href="#" class="logout-btn">Sign Out</a>
+    </header>
+
+    <div class="hero">
+        <h1>Cinematic Excellence</h1>
+        <p>Discover films curated for their exceptional storytelling, visuals, and performances.</p>
+       <div class="search-container">
+        <div class="search-box">
+            <input type="text" id="homeSearchInput" placeholder="Search for movies, directors, actors...">
+            <button id="homeSearchButton">Search</button>
+        </div>
+    </div>
+    </div> 
+    <div class="content">
+        <div class="content-header">
+            <h2>Featured Films</h2>
+            <a href="#" class="recommendation-btn">Get Personalized Recommendations</a>
+        </div>        <div class="movie-grid">            <div class="movie-card">
+                <a href="/search-results.html?q=Toy%20Story&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Toy Story</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Animation/Adventure/Comedy</div>
+                        <div class="movie-rating">Rating: 4.5</div>
+                    </div>
+                </a>
+            </div>            <div class="movie-card">
+                <a href="/search-results.html?q=Jumanji&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Jumanji</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Action/Adventure/Family</div>
+                        <div class="movie-rating">Rating: 3.8</div>
+                    </div>
+                </a>
+            </div>            <div class="movie-card">
+                <a href="/search-results.html?q=Grumpier%20Old%20Men&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Grumpier Old Men</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Comedy/Romance</div>
+                        <div class="movie-rating">Rating: 3.0</div>
+                    </div>
+                </a>
+            </div>            <div class="movie-card">
+                <a href="/search-results.html?q=Waiting%20to%20Exhale&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Waiting to Exhale</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Comedy/Drama/Romance</div>
+                        <div class="movie-rating">Rating: 3.5</div>
+                    </div>
+                </a>
+            </div><div class="movie-card">
+                <a href="/search-results.html?q=Father%20of%20the%20Bride%20Part%20II&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Father of the Bride Part II</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Comedy/Family/Romance</div>
+                        <div class="movie-rating">Rating: 3.2</div>
+                    </div>
+                </a>
+            </div>            <div class="movie-card">
+                <a href="/search-results.html?q=Heat&recommend=true">
+                    <div class="movie-info">                        <div class="movie-title">Heat</div>
+                        <div class="movie-year">1995</div>
+                        <div class="movie-genres">Action/Crime/Drama</div>
+                        <div class="movie-rating">Rating: 4.2</div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>    <footer>
+        <p>Copyright © 2025 CineVision. All rights reserved. <a href="#">Privacy</a> | <a href="#">Terms</a></p>    </footer>
+    
+    <script src="/static/moviejs.js"></script>
+    <script src="/home-search.js"></script>    <!-- Recommendation Modal Popup -->
+    <div id="recommendationModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Personalized Recommendations</h2>
+            <p>Enter a movie title to discover similar films tailored to your taste:</p>
+            <div class="modal-search">
+                <input type="text" id="recommendationInput" placeholder="Enter a movie title...">
+                <button id="recommendationSearchButton">Find Similar Movies</button>
+            </div>
+            <div class="popular-recommendations">
+                <h3>Popular Choices</h3>
+                <div class="popular-movies">
+                    <button class="popular-movie" data-title="Toy Story">Toy Story</button>
+                    <button class="popular-movie" data-title="The Matrix">The Matrix</button>
+                    <button class="popular-movie" data-title="Titanic">Titanic</button>
+                    <button class="popular-movie" data-title="Jurassic Park">Jurassic Park</button>
+                    <button class="popular-movie" data-title="The Godfather">The Godfather</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
