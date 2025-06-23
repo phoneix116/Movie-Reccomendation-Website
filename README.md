@@ -76,9 +76,11 @@ The system uses three main datasets:
 
 ### Clone the Repository
 ```bash
-git clone https://github.com/yourusername/movie-recommendation-system.git
+git clone https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system.git
 cd movie-recommendation-system
 ```
+
+> **Note:** When publishing to GitHub, replace `YOUR_GITHUB_USERNAME` with your actual GitHub username (e.g., `johnsmith`). People cloning your repository will use this updated URL.
 
 ### Install Dependencies
 ```bash
@@ -90,7 +92,14 @@ pip install -r requirements.txt
 python backend_df_direct_fixed.py
 ```
 
+For faster startup during development (loads a smaller dataset subset):
+```bash
+python backend_df_direct_fixed.py --fast
+```
+
 The application will be available at http://localhost:3000
+
+> **Note:** On first run, the system will process the dataset and build necessary indices, which may take some time. Cache files will be automatically generated to speed up subsequent startups.
 
 ## 📝 Usage
 
@@ -131,6 +140,8 @@ The application will be available at http://localhost:3000
 └── activity_log_*.log           # Activity logs
 ```
 
+> **Note:** Cache files (`df_cache.pkl` and `indices_cache.pkl`) will be generated automatically when you run the application for the first time. These files significantly improve startup time on subsequent runs and should not be committed to version control.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -144,6 +155,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
 ## 🙏 Acknowledgements
 
 - [Kaggle](https://www.kaggle.com/datasets/parasharmanas/movie-recommendation-system) - For the dataset
@@ -152,4 +164,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 
 
-Project Link: [https://github.com/yourusername/movie-recommendation-system](https://github.com/yourusername/movie-recommendation-system)
+Project Link: [https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system](https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system)
+
+> **Note:** When publishing to GitHub, replace `YOUR_GITHUB_USERNAME` with your actual GitHub username.
