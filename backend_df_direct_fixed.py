@@ -2,14 +2,20 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 import pandas as pd
 import numpy as np
 import joblib
+import pickle
 from sklearn.preprocessing import StandardScaler
 import os
 import json
 import logging
 import datetime
 import random
+import time
+import sys
 from flask_cors import CORS  # Import CORS support
 from functools import wraps  # For decorator functions
+
+# Check for fast startup mode
+FAST_STARTUP = "--fast" in sys.argv
 
 # Define log filename
 log_filename = f"activity_log_{datetime.datetime.now().strftime('%Y%m%d')}.log"
@@ -73,29 +79,81 @@ logging.info("Application starting")
 # Define the port to use
 SERVER_PORT = 3000
 
+# Flag to enable/disable expensive operations
+ENABLE_ANNOY = False  # Changed to False by default - we'll enable it manually if needed
+ENABLE_CONTENT_BASED = True  # Set to False to completely disable content-based recommendations
+
 # Define the genre list
 all_genres = ['Action', 'Adventure', 'Animation', 'Children', 'Comedy', 'Crime',
               'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical',
               'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
 
 try:
-    # Load the df.csv file directly
+    # Check for cached preprocessed data first
+    df_cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "df_cache.pkl")
     df_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "df.csv")
-    logging.info(f"Loading dataframe from {df_path}")
     
-    # Try to load the df dataset
-    try:
-        if os.path.exists(df_path):
-            df = pd.read_csv(df_path)
-            logging.info(f"Successfully loaded dataframe with {len(df)} rows from df.csv")
-        else:
-            raise FileNotFoundError(f"df.csv not found at {df_path}")
-    except Exception as df_error:
-        logging.error(f"Error loading df.csv: {str(df_error)}")
+    # Variable to track if we loaded from cache successfully
+    loaded_from_cache = False
+    
+    # Try to load the cached dataset if not in FAST_STARTUP mode
+    if not FAST_STARTUP and os.path.exists(df_cache_path):
+        try:
+            logging.info(f"Attempting to load cached dataframe from {df_cache_path}")
+            start_time = time.time()
+            with open(df_cache_path, 'rb') as f:
+                df_data = pickle.load(f)
+                
+            if 'df' in df_data and 'X_scaled' in df_data and 'feature_cols' in df_data:
+                df = df_data['df']
+                X_scaled = df_data['X_scaled']
+                feature_cols = df_data['feature_cols']
+                
+                load_time = time.time() - start_time
+                logging.info(f"Successfully loaded cached dataframe with {len(df)} rows in {load_time:.2f} seconds")
+                
+                # Skip to after the dataframe preprocessing
+                logging.info("Using pre-processed cached data, skipping preprocessing steps")
+                
+                # We need the cluster distribution for later
+                if 'cluster' in df.columns:
+                    cluster_counts = df['cluster'].value_counts()
+                    logging.info(f"Cluster distribution: {cluster_counts.to_dict()}")
+                  # Mark that we've loaded from cache successfully
+                loaded_from_cache = True
+                
+            else:
+                logging.info("Cache file exists but doesn't contain required data, loading from CSV...")
+        except Exception as cache_error:
+            if not isinstance(cache_error, StopIteration):  # We no longer use StopIteration
+                logging.error(f"Error loading cached dataframe: {str(cache_error)}")
+                logging.info("Falling back to CSV loading")
+    
+    # Only load from CSV if we didn't successfully load from cache
+    if not loaded_from_cache:
+        logging.info(f"Loading dataframe from {df_path}")
         
-        # Create a minimal dataset for testing
-        logging.info("Creating minimal movie dataset for testing")
-        df = pd.DataFrame({
+        # Try to load the df dataset
+        try:
+            if os.path.exists(df_path):
+                if FAST_STARTUP:
+                    # Ultra-fast startup mode - only load a small subset of data
+                    logging.info("FAST STARTUP MODE: Loading only a small subset of data")
+                    df = pd.read_csv(df_path, nrows=10000)  # Only read first 10,000 rows
+                    logging.info(f"Successfully loaded small dataframe with {len(df)} rows (FAST MODE)")
+                else:                    # Normal mode - load the full dataset
+                    start_time = time.time()
+                    df = pd.read_csv(df_path)
+                    load_time = time.time() - start_time
+                    logging.info(f"Successfully loaded full dataframe with {len(df)} rows from df.csv in {load_time:.2f} seconds")
+            else:
+                raise FileNotFoundError(f"df.csv not found at {df_path}")
+        except Exception as df_error:
+            logging.error(f"Error loading df.csv: {str(df_error)}")
+            
+            # Create a minimal dataset for testing
+            logging.info("Creating minimal movie dataset for testing")
+            df = pd.DataFrame({
             'movieId': range(1, 11),
             'title': [
                 'Toy Story (1995)', 'Jumanji (1995)', 'Grumpier Old Men (1995)',
@@ -162,11 +220,25 @@ try:
         feature_cols = all_genres + ['year'] if 'year' in df.columns else all_genres
         X = df[feature_cols].copy()
         X.fillna(0, inplace=True)
-        
-        # Apply scaling
+          # Apply scaling
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         logging.info("Feature matrix prepared for recommendations")
+        
+        # Save the processed dataframe to cache if not in FAST_STARTUP mode and we didn't load from cache
+        if not FAST_STARTUP and not loaded_from_cache:
+            try:
+                df_cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "df_cache.pkl")
+                logging.info(f"Saving processed dataframe to cache: {df_cache_path}")
+                with open(df_cache_path, 'wb') as f:
+                    pickle.dump({
+                        'df': df,
+                        'X_scaled': X_scaled,
+                        'feature_cols': feature_cols
+                    }, f)
+                logging.info("Dataframe cache saved successfully")
+            except Exception as cache_error:
+                logging.error(f"Failed to save dataframe cache: {str(cache_error)}")
     except Exception as feature_error:
         logging.error(f"Error preparing feature matrix: {str(feature_error)}")
         X_scaled = None
@@ -187,6 +259,148 @@ except Exception as init_error:
     logging.info("Created emergency fallback dataset")
     X_scaled = None
 
+# Build fast lookup indices for titles and genres
+logging.info("Building fast lookup indices for titles and genres")
+
+# Check if we have cached indices we can load
+indices_pickle_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "indices_cache.pkl")
+indices_loaded = False
+
+# Only try to load cache if we're not in fast startup mode (which uses a subset of data)
+if not FAST_STARTUP and os.path.exists(indices_pickle_path):
+    try:
+        logging.info(f"Attempting to load cached indices from {indices_pickle_path}")
+        with open(indices_pickle_path, 'rb') as f:
+            cached_indices = pickle.load(f)
+            
+            # Verify the cache is compatible with our current dataset
+            if ('df_rows' in cached_indices and 
+                'title_index' in cached_indices and 
+                'title_without_year_index' in cached_indices and
+                'title_words_index' in cached_indices and 
+                'genre_index' in cached_indices and
+                cached_indices['df_rows'] == len(df)):
+                
+                # Cache is valid, use it
+                title_index = cached_indices['title_index']
+                title_without_year_index = cached_indices['title_without_year_index']
+                title_words_index = cached_indices['title_words_index']
+                genre_index = cached_indices['genre_index']
+                  # Get counts for logging
+                unique_titles = set()
+                for titles in title_index.values():
+                    for idx in titles:
+                        try:
+                            # Check if the index is valid
+                            if idx >= 0 and idx < len(df):
+                                title = df.iloc[idx]['title']
+                                # Make sure title is a string before calling lower()
+                                if isinstance(title, str):
+                                    unique_titles.add(title.lower())
+                                else:
+                                    # Convert non-string titles to string
+                                    unique_titles.add(str(title).lower())
+                        except Exception as title_error:
+                            logging.warning(f"Error adding title at index {idx} to unique titles set: {str(title_error)}")
+                
+                unique_genres = set(genre_index.keys())
+                
+                logging.info(f"Successfully loaded cached indices for {len(unique_titles)} titles and {len(unique_genres)} genres")
+                indices_loaded = True
+            else:
+                logging.info("Cached indices not compatible with current dataset, rebuilding...")
+    except Exception as e:
+        logging.error(f"Error loading cached indices: {str(e)}")
+        logging.info("Will rebuild indices from scratch")
+
+# If we couldn't load cached indices, build them
+if not indices_loaded:
+    title_index = {}  # Full title -> list of indices
+    title_without_year_index = {}  # Title without year -> list of indices
+    title_words_index = {}  # Words in title -> list of indices
+    genre_index = {}  # Genre -> list of indices
+
+    # Count unique titles for logging
+    unique_titles = set()
+    unique_genres = set()
+
+    # Process in batches for large datasets to avoid memory spikes
+    batch_size = 100000  # Process this many rows at once
+    total_rows = len(df)
+    num_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
+
+    logging.info(f"Building indices in {num_batches} batches (batch size: {batch_size})")
+    
+    # Process in batches
+    for batch_num in range(num_batches):
+        start_idx = batch_num * batch_size
+        end_idx = min((batch_num + 1) * batch_size, total_rows)
+        
+        if batch_num % 10 == 0 or batch_num == num_batches - 1:  # Log every 10 batches or the last batch
+            logging.info(f"Processing batch {batch_num+1}/{num_batches} (rows {start_idx}-{end_idx})")
+        
+        # Get a slice of the dataframe
+        df_batch = df.iloc[start_idx:end_idx]
+        
+        for idx, row in df_batch.iterrows():
+            # Process title
+            if 'title' in row and pd.notnull(row['title']):
+                # Get the full lowercase title
+                full_title = str(row['title']).lower()
+                unique_titles.add(full_title)
+                
+                # Add to full title index
+                if full_title not in title_index:
+                    title_index[full_title] = []
+                title_index[full_title].append(idx)
+                
+                # Extract title without year and add to that index
+                title_no_year = full_title.split('(')[0].strip()
+                if title_no_year not in title_without_year_index:
+                    title_without_year_index[title_no_year] = []
+                title_without_year_index[title_no_year].append(idx)
+                
+                # Add individual words to word index for more flexible searching
+                for word in title_no_year.split():
+                    if len(word) > 2:  # Only index words with more than 2 characters
+                        if word not in title_words_index:
+                            title_words_index[word] = []
+                        title_words_index[word].append(idx)
+            
+            # Process genres
+            if 'genres' in row and pd.notnull(row['genres']):
+                genres = str(row['genres']).split('|')
+                for genre in genres:
+                    genre = genre.strip().lower()
+                    unique_genres.add(genre)
+                    if genre:
+                        if genre not in genre_index:
+                            genre_index[genre] = []
+                        genre_index[genre].append(idx)
+
+    logging.info(f"Indexed {len(unique_titles)} unique titles and {len(unique_genres)} unique genres")
+    logging.info(f"Created {len(title_index)} full title entries, {len(title_without_year_index)} title-without-year entries, and {len(title_words_index)} word entries")
+    logging.info(f"Created {len(genre_index)} genre entries")
+
+    # Save indices to cache (but only if not in FAST_STARTUP mode which uses a subset)
+    if not FAST_STARTUP:
+        try:
+            import pickle
+            logging.info(f"Saving indices to cache file: {indices_pickle_path}")
+            with open(indices_pickle_path, 'wb') as f:
+                pickle.dump({
+                    'df_rows': len(df),
+                    'title_index': title_index,
+                    'title_without_year_index': title_without_year_index,
+                    'title_words_index': title_words_index,
+                    'genre_index': genre_index
+                }, f)
+            logging.info("Indices cache saved successfully")
+        except Exception as e:
+            logging.error(f"Failed to save indices cache: {str(e)}")
+else:
+    logging.info("Using cached indices, skipping index building")
+
 # Helper function to prepare data for API responses
 def prepare_movie_data(df_subset):
     """Prepares a subset of movies for API response by selecting relevant columns."""
@@ -195,136 +409,184 @@ def prepare_movie_data(df_subset):
     
     return df_subset[available_columns]
 
+# Setup variables for Annoy - but don't load the module unless needed
+annoy_index = None
+annoy_index_path = 'annoy_index.ann'
+num_features = len(all_genres) + (1 if 'year' in df.columns else 0)
+max_annoy_items = 100000  # Maximum items to include in Annoy index
+
+# Function to build a partial Annoy index when needed
+def build_partial_annoy_index():
+    global annoy_index
+    
+    if not ENABLE_ANNOY:
+        logging.info("Annoy is disabled - skipping index building")
+        return None
+        
+    if annoy_index is not None:
+        return annoy_index  # Already built
+    
+    try:
+        # First try to import Annoy here - this way we don't load it at startup
+        from annoy import AnnoyIndex
+        logging.info("Building partial Annoy index on demand (first-time request)")
+        
+        # Set a timeout for building
+        start_time = time.time()
+        max_build_time = 10  # seconds - reduced from 20 to 10 for faster response
+        
+        # Create the index
+        temp_index = AnnoyIndex(num_features, 'euclidean')
+        
+        # Sample size reduced for faster builds
+        sample_size = min(10000, len(df))  # Use at most 10,000 items
+        
+        # Simple random sampling (much faster than stratified sampling)
+        if len(df) <= sample_size:
+            sample_indices = df.index.tolist()
+        else:
+            sample_indices = df.sample(sample_size).index.tolist()
+        
+        # Build the index with our sampled items
+        added_count = 0
+        for idx in sample_indices:
+            if time.time() - start_time > max_build_time:
+                logging.warning(f"Annoy index building timed out after {max_build_time} seconds")
+                break
+                
+            row = df.loc[idx]
+            features = [row[genre] if genre in row else 0 for genre in all_genres]
+            if 'year' in df.columns:
+                features.append(row['year'])
+            temp_index.add_item(idx, features)
+            added_count += 1
+        
+        # Only build if we added a reasonable number of items
+        if added_count > 100:  # Reduced threshold from 1000 to 100
+            temp_index.build(5)  # Reduced from 10 trees to 5 for speed
+            logging.info(f'Partial Annoy index built with {added_count} items')
+            return temp_index
+        else:
+            logging.warning(f'Not enough items added to Annoy index ({added_count}), using fallback method')
+            return None
+            
+    except Exception as e:
+        logging.error(f'Error building Annoy index: {e}')
+        return None
+
 def recommend_movies(title, df, X_scaled=None, n_recommendations=10):
     """
     Recommend movies based on a title using either content-based filtering 
     or cluster-based recommendations
     """
     logging.info(f"Getting recommendations for: {title}")
-      # Check if recommendations are already cached
-    if title in recommendation_cache:
-        logging.info(f"Using cached recommendations for: {title}")
-        return recommendation_cache[title]
-    
-    # Set a timeout for recommendation processing
+      # Set a timeout for recommendation processing
     import time
     start_time = time.time()
     max_processing_time = 30  # Maximum processing time in seconds
     
+    if title in recommendation_cache:
+        logging.info(f"Using cached recommendations for: {title}")
+        return recommendation_cache[title]
     try:
-        # Helper function to get additional recommendations with similar genres
-        def get_additional_recommendations(recommendations, movie, original_genres, n_recommendations, df, seen_titles):            # Calculate how many more recommendations we need
-            remaining = n_recommendations - len(recommendations)
-            if remaining <= 0:
-                return
-                
-            logging.info(f"Finding {remaining} additional movies with similar genres")
-            
-            # First try to get movies with similar genres
-            similar_genre_movies = pd.DataFrame()
-            
-            if original_genres and len(original_genres) > 0:
-                # Much more efficient approach: Use boolean indexing to filter the dataframe
-                # This is much faster than iterating through each row
-                genre_filter = None
-                
-                # For each genre in original movie, create a filter condition
-                for genre in original_genres:
-                    # Only use string values for genre matching
-                    condition = df['genres'].astype(str).str.contains(genre, na=False)
-                    if genre_filter is None:
-                        genre_filter = condition
-                    else:
-                        genre_filter = genre_filter | condition
-                
-                # Apply the genre filter if we created one
-                if genre_filter is not None:
-                    # Also filter out movies we've already seen or the original movie
-                    filtered_movies = df[genre_filter].copy()
-                    
-                    # Further filter to remove seen titles and the original movie
-                    mask = ~filtered_movies['title'].astype(str).str.lower().isin([t.lower() for t in seen_titles])
-                    filtered_movies = filtered_movies[mask]
-                    
-                    # Also remove the original movie
-                    if isinstance(movie['title'], str):
-                        mask = filtered_movies['title'].astype(str).str.lower() != movie['title'].lower()
-                        filtered_movies = filtered_movies[mask]
-                    
-                    # Sort by rating if available
-                    if 'rating' in filtered_movies.columns:
-                        filtered_movies = filtered_movies.sort_values('rating', ascending=False)
-                    
-                    # Take only what we need
-                    similar_genre_movies = filtered_movies.head(remaining)
-                    
-                    # Update seen_titles
-                    for title in similar_genre_movies['title'].astype(str):
-                        seen_titles.add(title.lower())
-            
-            # If we have similar genre movies, add them to recommendations
-            if len(similar_genre_movies) > 0:
-                # Sort by rating if available
-                if 'rating' in similar_genre_movies:
-                    similar_genre_movies = similar_genre_movies.sort_values('rating', ascending=False)
-                    
-                # Add up to the remaining count
-                similar_genre_movies = similar_genre_movies.head(remaining)
-                recommendations = pd.concat([recommendations, similar_genre_movies])
-                remaining = n_recommendations - len(recommendations)
-            
-            # If we still need more, add random popular movies
-            if remaining > 0:
-                logging.info(f"Adding {remaining} random popular movies")
-                
-                # Get movies not already in recommendations
-                other_movies = df[~df['title'].isin(recommendations['title'])]
-                other_movies = other_movies[other_movies['title'] != movie['title']]
-                
-                # Further filter to remove any titles we've already seen
-                filtered_movies = pd.DataFrame()
-                for _, row in other_movies.iterrows():
-                    if 'title' not in row:
-                        continue
-                    rec_title_lower = row['title'].lower() if isinstance(row['title'], str) else ''
-                    if rec_title_lower not in seen_titles:
-                        filtered_movies = pd.concat([filtered_movies, row.to_frame().T])
-                        seen_titles.add(rec_title_lower)
-                        if len(filtered_movies) >= remaining:
-                            break
-                
-                # Sort by rating if available
-                if 'rating' in filtered_movies and not filtered_movies.empty:
-                    filtered_movies = filtered_movies.sort_values('rating', ascending=False)
-                
-                # Add to recommendations
-                if not filtered_movies.empty:
-                    recommendations = pd.concat([recommendations, filtered_movies.head(remaining)])
-            
-            return recommendations
-
-        # Remove year from search if present
+        # Get the title without year for better searching
         search_title = title.split('(')[0].strip().lower()
-          # First try exact match - handle potential NaN values
-        movie = df[df['title'].notna() & (df['title'].str.lower() == title.lower())]
+        movie_indices = []
         
-        # If no exact match, try flexible search
-        if len(movie) == 0:
-            movie = df[df['title'].notna() & df['title'].str.lower().str.contains(search_title, na=False)]
+        # Try matching strategies in order of precision
         
-        if len(movie) == 0:
-            logging.warning(f"Movie not found: {title}")
+        # 1. First try exact match on full title
+        if title.lower() in title_index:
+            movie_indices = title_index[title.lower()]
+            logging.info(f"Found exact title match for: {title}")
+        
+        # 2. Then try exact match on title without year
+        elif search_title in title_without_year_index:
+            movie_indices = title_without_year_index[search_title]
+            logging.info(f"Found title-without-year match for: {search_title}")
+            
+        # 3. Try partial matches on full titles
+        else:
+            # Collect possible matches from word index
+            candidate_indices = set()
+            words = search_title.split()
+            
+            # If we have enough words, use word index for speed
+            if len(words) > 1:
+                for word in words:
+                    if len(word) > 2 and word in title_words_index:
+                        for idx in title_words_index[word]:
+                            candidate_indices.add(idx)
+                
+                # If we found candidate movies via word index, check them
+                if candidate_indices:
+                    for idx in candidate_indices:
+                        movie_title = df.iloc[idx]['title'].lower()
+                        # Check if search_title is a substantial part of the movie title
+                        if search_title in movie_title:
+                            movie_indices.append(idx)
+            
+            # If we still didn't find matches, do a more comprehensive search
+            if not movie_indices:
+                logging.info(f"No quick matches found, performing comprehensive search for: {search_title}")
+                for t, indices in title_index.items():
+                    if search_title in t:
+                        movie_indices.extend(indices)
+                        if len(movie_indices) >= 10:  # Limit to avoid too many matches
+                            break
+        
+        # If still no matches, log the failure
+        if not movie_indices:
+            logging.warning(f"Movie not found after all search attempts: {title}")
             return f"Movie not found: {title}"
         
-        # Use the first match
-        movie = movie.iloc[0]
-        logging.info(f"Found movie: {movie['title']}")
-        
-        # Store the original movie's genres for later use when finding replacements
-        original_genres = []
-        if 'genres' in movie and movie['genres']:
-            original_genres = movie['genres'].split('|') if isinstance(movie['genres'], str) else []
-            logging.info(f"Original movie genres: {original_genres}")
+        # Use the first match (most relevant)
+        movie_idx = movie_indices[0]
+        movie = df.iloc[movie_idx]
+        logging.info(f"Found movie: {movie['title']} (index: {movie_idx})")
+        original_genres = movie['genres'].split('|') if 'genres' in movie and movie['genres'] else []
+          # Skip Annoy if completely disabled via flag
+        if ENABLE_ANNOY:
+            # Try to use Annoy for fast similarity search (lazy loading)
+            try:
+                # Only try to build/use Annoy for the first few requests to avoid slowing down the server
+                if title not in recommendation_cache and len(recommendation_cache) < 5:  # Reduced from 20 to 5
+                    # Build the index lazily only when needed
+                    if annoy_index is None:
+                        annoy_index = build_partial_annoy_index()
+                    
+                    # If we have a valid index and the movie is in the index
+                    if annoy_index is not None:
+                        try:
+                            # Check if the movie's index is in the Annoy index without actually raising exceptions
+                            if movie_idx < annoy_index.get_n_items():
+                                # Get similar movies
+                                n_search = n_recommendations * 2
+                                neighbor_indices = annoy_index.get_nns_by_item(movie_idx, n_search + 1)[1:]
+                                all_recommendations = df.iloc[neighbor_indices]
+                                seen_titles = set()
+                                recommendations = pd.DataFrame()
+                                
+                                for _, rec in all_recommendations.iterrows():
+                                    rec_title_lower = rec['title'].lower() if isinstance(rec['title'], str) else ''
+                                    if rec_title_lower not in seen_titles and len(recommendations) < n_recommendations:
+                                        seen_titles.add(rec_title_lower)
+                                        recommendations = pd.concat([recommendations, rec.to_frame().T])
+                                
+                                if len(recommendations) < n_recommendations:
+                                    logging.info("Adding more movies to content-based recommendations")
+                                    recommendations = get_additional_recommendations(recommendations, movie, original_genres, n_recommendations, df, seen_titles)
+                                
+                                logging.info(f"Returning {len(recommendations)} unique content-based recommendations (Annoy)")
+                                recommendation_cache[title] = recommendations
+                                return recommendations
+                            else:
+                                logging.info(f"Movie {movie_idx} not in Annoy index (index size: {annoy_index.get_n_items()})")
+                        except Exception as rec_error:
+                            logging.info(f"Movie index error: {str(rec_error)}")
+                            # Fall through to standard recommendation methods
+            except Exception as annoy_error:
+                logging.error(f"Error in Annoy recommendation setup: {str(annoy_error)}")
         
         # If we have content-based features, use them
         if X_scaled is not None:
@@ -654,7 +916,8 @@ def search():
             logging.error(f"Error parsing JSON data: {str(e)}")
     else:  # GET request
         data = {}  # Initialize as empty dictionary
-      # Get parameters from either JSON body or URL query parameters
+    
+    # Get parameters from either JSON body or URL query parameters
     # First check for 'title', then 'q' (which is used in the URL query string from home-search.js)
     movie_title = data.get("title", request.args.get("title", request.args.get("q", "")))
     get_recommendations = data.get("recommend", request.args.get("recommend", "false").lower() == "true")
@@ -676,7 +939,8 @@ def search():
         logging.info(f"Genre Search: '{genre_search}'")
     else:
         logging.info(f"Search: '{movie_title}', Get recommendations: {get_recommendations}")
-      # If recommendation flag is set, use the recommend function
+    
+    # If recommendation flag is set, use the recommend function
     if get_recommendations:
         # Get number of recommendations requested, default to 10
         try:
@@ -712,12 +976,13 @@ def search():
             "status": "success",
             "query": movie_title,
             "recommendations": unique_recommendations
-        })    # If not a recommendation request, search for matching titles
-    if not movie_title:
+        })
+    
+    # If not a recommendation request, search for matching titles
+    if not movie_title and not genre_search:
         return jsonify({"error": "No search term provided"}), 400
-      # Check if this is a genre search from the query parameter
-    genre_search = request.args.get("genre", "")
-      # If genre_search is provided, search by genre
+    
+    # If genre_search is provided, search by genre
     if genre_search:
         # Check cache for genre search
         genre_cache_key = f"genre_{genre_search.lower()}"
@@ -747,50 +1012,70 @@ def search():
         # Case-insensitive genre search
         genre_search_lower = genre_search.lower()
         
-        # Start with a more specific search with anchored terms for better performance
-        # This will prioritize exact genre matches
-        matching_titles = pd.DataFrame()
+        # Try to use the genre_index for fast lookups first
+        matching_indices = []
+        matching_titles = pd.DataFrame()  # Initialize empty DataFrame
         
-        try:
-            # First try to find movies with the genre as a complete word
-            # This is a more precise, faster initial search
-            word_boundary_pattern = f"\\b{genre_search_lower}\\b"
-            exact_matches = df[df['genres'].str.lower().str.contains(word_boundary_pattern, na=False, regex=True)]
+        # First try exact genre match
+        if genre_search_lower in genre_index:
+            logging.info(f"Found exact genre match in index for: {genre_search_lower}")
+            matching_indices = genre_index[genre_search_lower]
+            matching_titles = df.iloc[matching_indices]
+        # Then try partial genre matches        else:
+            logging.info(f"No exact genre match, trying partial matches for: {genre_search_lower}")
+            for g, indices in genre_index.items():
+                if genre_search_lower in g:
+                    matching_indices.extend(indices)
+                    if len(matching_indices) > 1000:  # Limit to avoid too many matches
+                        break
             
-            # If we find enough exact matches, use those
-            if len(exact_matches) >= 20:
-                matching_titles = exact_matches
-                logging.info(f"Found {len(matching_titles)} exact genre matches for: {genre_search}")
-            else:
-                # Fall back to broader search if needed
-                # Find movies matching the genre (partial match)
-                matching_titles = df[df['genres'].str.lower().str.contains(genre_search_lower, na=False)]
+            # Remove duplicates
+            if matching_indices:
+                matching_indices = list(set(matching_indices))
+                matching_titles = df.iloc[matching_indices]
                 
-                # If we have a huge number of matches, limit them for performance
-                if len(matching_titles) > 1000:
-                    logging.info(f"Found {len(matching_titles)} movies matching genre, limiting results for performance")
-                    # If we have ratings, prioritize by rating
-                    if 'rating' in matching_titles.columns:
-                        matching_titles = matching_titles.sort_values('rating', ascending=False).head(1000)
-                    else:
-                        # Otherwise just take the first 1000
-                        matching_titles = matching_titles.head(1000)
-            
-            # Check if we're taking too long
-            if time.time() - start_time > max_processing_time:
-                logging.warning(f"Genre search timed out after {max_processing_time} seconds, limiting results")
-                if len(matching_titles) > 100:
-                    matching_titles = matching_titles.head(100)
-        
-        except Exception as e:
-            logging.error(f"Error during genre search: {str(e)}")
-            # Fall back to a simpler approach in case of error
-            matching_titles = df[df['genres'].str.lower().str.contains(genre_search_lower, na=False)].head(100)
+        # If we didn't find matches or found very few, fall back to the old method
+        if len(matching_titles) < 20:
+            logging.info(f"Few or no matches found with index, using regex search for: {genre_search_lower}")
+            try:
+                # First try to find movies with the genre as a complete word
+                # This is a more precise, faster initial search
+                word_boundary_pattern = f"\\b{genre_search_lower}\\b"
+                exact_matches = df[df['genres'].str.lower().str.contains(word_boundary_pattern, na=False, regex=True)]
+                
+                # If we find enough exact matches, use those
+                if len(exact_matches) >= 20:
+                    matching_titles = exact_matches
+                    logging.info(f"Found {len(matching_titles)} exact genre matches for: {genre_search}")
+                else:
+                    # Fall back to broader search if needed
+                    # Find movies matching the genre (partial match)
+                    matching_titles = df[df['genres'].str.lower().str.contains(genre_search_lower, na=False)]
+                    
+                    # If we have a huge number of matches, limit them for performance
+                    if len(matching_titles) > 1000:
+                        logging.info(f"Found {len(matching_titles)} movies matching genre, limiting results for performance")
+                        # If we have ratings, prioritize by rating
+                        if 'rating' in matching_titles.columns:
+                            matching_titles = matching_titles.sort_values('rating', ascending=False).head(1000)
+                        else:
+                            # Otherwise just take the first 1000
+                            matching_titles = matching_titles.head(1000)
+                
+                # Check if we're taking too long
+                if time.time() - start_time > max_processing_time:
+                    logging.warning(f"Genre search timed out after {max_processing_time} seconds, limiting results")
+                    if len(matching_titles) > 100:
+                        matching_titles = matching_titles.head(100)
+                        
+            except Exception as e:
+                logging.error(f"Error during genre search: {str(e)}")
+                # Fall back to a simpler approach in case of error
+                matching_titles = df[df['genres'].str.lower().str.contains(genre_search_lower, na=False)].head(100)
         
         # Log the search results
         logging.info(f"Returning {len(matching_titles)} movies matching genre: {genre_search}")
-    else:
-        # Search for partial matches in titles (case-insensitive)
+    else:        # Search for partial matches in titles (case-insensitive)
         search_term = movie_title.lower()
         matching_titles = df[df['title'].str.lower().str.contains(search_term, na=False)]
         
@@ -808,7 +1093,8 @@ def search():
             else:
                 # Otherwise just take the first 1000
                 matching_titles = matching_titles.head(1000)
-      # Get total count for pagination info
+    
+    # Get total count for pagination info
     total_count = len(matching_titles)
     
     # Sort by rating if available, otherwise by title
@@ -816,7 +1102,8 @@ def search():
         matching_titles = matching_titles.sort_values('rating', ascending=False)
     else:
         matching_titles = matching_titles.sort_values('title')
-      # Take only a reasonable number of results for the response
+    
+    # Take only a reasonable number of results for the response
     # This ensures we don't return massive amounts of data
     # Allow for 2 pages (40 results)
     matching_titles = matching_titles.head(40)
@@ -830,7 +1117,8 @@ def search():
         if title_lower not in unique_titles:
             unique_titles.add(title_lower)
             unique_results = pd.concat([unique_results, movie.to_frame().T])
-      # Take up to 40 results (for 2 pages)
+    
+    # Take up to 40 results (for 2 pages)
     results = unique_results.head(40)
     
     # Check if we have any results
@@ -848,7 +1136,7 @@ def search():
     
     # Cache genre search results if this was a genre search
     if genre_search and results_list:
-        genre_cache_key = f"genre_{genre_search_lower}"
+        genre_cache_key = f"genre_{genre_search.lower()}"
         recommendation_cache[genre_cache_key] = results
         logging.info(f"Cached results for genre: {genre_search}")
     
@@ -905,7 +1193,7 @@ def recommend():
     except ValueError:
         n_recommendations = 10
     
-    recommendations = recommend_movies(movie_title, df, None, n_recommendations)
+    recommendations = recommend_movies(movie_title, df, X_scaled, n_recommendations)
     
     # Handle error case
     if isinstance(recommendations, str):
@@ -967,6 +1255,9 @@ def movie_details():
 def movie_details_html():
     # Redirect to home page
     from flask import redirect
+    title = request.args.get("title", "")
+    if title:
+        return redirect(f"/search-results.html?q={title}&recommend=true")
     return redirect("/")
 
 @app.route("/performance_dashboard.html")
@@ -1207,6 +1498,54 @@ def page_not_found(e):
             return redirect("/")
     # For other 404 errors, return standard error page
     return f"Page not found: {path}", 404
+
+def get_additional_recommendations(recommendations, movie, original_genres, n_recommendations, df, seen_titles):
+    # Calculate how many more recommendations we need
+    remaining = n_recommendations - len(recommendations)
+    if remaining <= 0:
+        return recommendations
+    logging.info(f"Finding {remaining} additional movies with similar genres")
+    similar_genre_movies = pd.DataFrame()
+    if original_genres and len(original_genres) > 0:
+        genre_filter = None
+        for genre in original_genres:
+            condition = df['genres'].astype(str).str.contains(genre, na=False)
+            if genre_filter is None:
+                genre_filter = condition
+            else:
+                genre_filter = genre_filter | condition
+        if genre_filter is not None:
+            filtered_movies = df[genre_filter].copy()
+            mask = ~filtered_movies['title'].astype(str).str.lower().isin([t.lower() for t in seen_titles])
+            filtered_movies = filtered_movies[mask]
+            if isinstance(movie['title'], str):
+                mask = filtered_movies['title'].astype(str).str.lower() != movie['title'].lower()
+                filtered_movies = filtered_movies[mask]
+            if 'rating' in filtered_movies.columns:
+                filtered_movies = filtered_movies.sort_values('rating', ascending=False)
+            similar_genre_movies = filtered_movies.head(remaining)
+            for title in similar_genre_movies['title'].astype(str):
+                seen_titles.add(title.lower())
+    if len(similar_genre_movies) > 0:
+        recommendations = pd.concat([recommendations, similar_genre_movies])
+        remaining = n_recommendations - len(recommendations)
+    if remaining > 0:
+        logging.info(f"Adding {remaining} random popular movies")
+        other_movies = df[~df['title'].isin(recommendations['title'])]
+        other_movies = other_movies[other_movies['title'] != movie['title']]
+        filtered_movies = pd.DataFrame()
+        for _, row in other_movies.iterrows():
+            rec_title_lower = row['title'].lower() if isinstance(row['title'], str) else ''
+            if rec_title_lower not in seen_titles:
+                filtered_movies = pd.concat([filtered_movies, row.to_frame().T])
+                seen_titles.add(rec_title_lower)
+                if len(filtered_movies) >= remaining:
+                    break
+        if 'rating' in filtered_movies and not filtered_movies.empty:
+            filtered_movies = filtered_movies.sort_values('rating', ascending=False)
+        if not filtered_movies.empty:
+            recommendations = pd.concat([recommendations, filtered_movies.head(remaining)])
+    return recommendations
 
 if __name__ == "__main__":
     # Always use port 3000
