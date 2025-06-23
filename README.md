@@ -23,6 +23,29 @@ This project is a movie recommendation system that suggests movies based on user
 - **Performance Optimizations**: Efficient algorithms to handle large datasets
 - **Activity Logging**: Comprehensive logging for monitoring and debugging
 
+## 🔄 Recent Updates
+
+### Performance Optimizations
+- **Persistent Caching**: Added file-based caching for processed dataframe (`df_cache.pkl`) and lookup indices (`indices_cache.pkl`)
+- **Fast Lookup Indices**: Implemented multi-tier search with specialized indices for titles, titles without years, and word matching
+- **Batch Processing**: Added batch processing for index building to reduce memory usage with large datasets
+- **Annoy Integration**: Added approximate nearest-neighbor search with lazy loading and timeout protection
+
+### Feature Flags
+- **ENABLE_ANNOY**: Toggle expensive Annoy-based recommendation features
+- **ENABLE_CONTENT_BASED**: Control content-based recommendation algorithms
+- **FAST_STARTUP**: Run in development mode with `--fast` flag to load only a subset of data
+
+### Search Improvements
+- **Multi-Strategy Search**: Enhanced title matching with hierarchical fallback strategies
+- **Smart Caching**: Improved in-memory caching for recommendations and genre searches
+- **Fallback Mechanisms**: Graceful degradation with timeout protection and multiple fallback methods
+
+### API Enhancements
+- **CORS Support**: Added proper cross-origin resource sharing support
+- **JSONP Support**: Added JSONP response wrapping via a decorator
+- **Enhanced Error Handling**: Comprehensive error recovery with detailed logging
+
 ## 🛠️ Technologies Used
 
 ### Backend
@@ -121,7 +144,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## 🙏 Acknowledgements
 
 - [Kaggle](https://www.kaggle.com/datasets/parasharmanas/movie-recommendation-system) - For the dataset
