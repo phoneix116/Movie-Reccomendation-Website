@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 import joblib
 import pickle
+import shelve
+import glob  # Added for JSON backup file pattern matching
+import re  # Added for regex handling
 from sklearn.preprocessing import StandardScaler
 import os
 import json
@@ -11,6 +14,7 @@ import datetime
 import random
 import time
 import sys
+import traceback
 from flask_cors import CORS  # Import CORS support
 from functools import wraps  # For decorator functions
 
@@ -65,6 +69,7 @@ logging.basicConfig(
 )    # Create a recommendation cache to improve performance
 recommendation_cache = {}
 genre_search_cache = {}  # Add cache for genre searches
+logging.info(f"Genre search cache initialized as an empty dictionary")
 
 # Add a handler to also print logs to console
 console_handler = logging.StreamHandler()
@@ -87,6 +92,322 @@ ENABLE_CONTENT_BASED = True  # Set to False to completely disable content-based 
 all_genres = ['Action', 'Adventure', 'Animation', 'Children', 'Comedy', 'Crime',
               'Documentary', 'Drama', 'Fantasy', 'Film-Noir', 'Horror', 'Musical',
               'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
+
+# Create Flask application context variables for caching
+# These will be accessible throughout the application
+with app.app_context():
+    # Initialize application-wide caches if they don't exist
+    if not hasattr(app, 'recommendation_cache'):
+        app.recommendation_cache = {}
+        logging.info("Initialized app.recommendation_cache")
+    
+    if not hasattr(app, 'genre_search_cache'):
+        app.genre_search_cache = {}
+        logging.info("Initialized app.genre_search_cache")
+
+# For backward compatibility, define these at module level too
+recommendation_cache = {}
+genre_search_cache = {}
+
+# Persistent caching file paths
+cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+# Create cache directory if it doesn't exist
+os.makedirs(cache_dir, exist_ok=True)
+recommendation_cache_path = os.path.join(cache_dir, "recommendation_cache")
+genre_cache_path = os.path.join(cache_dir, "genre_cache")
+
+# Function to load persistent caches at startup
+def load_persistent_caches():
+    """Load persistent caches from disk if they exist"""
+    global recommendation_cache, genre_search_cache
+    
+    # Ensure cache directory exists
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        logging.info(f"Ensuring cache directory exists: {cache_dir}")
+    except Exception as e:
+        logging.error(f"Error creating cache directory: {str(e)}")
+    
+    # Load recommendation cache
+    try:
+        rec_cache_file = f"{recommendation_cache_path}.db"
+        if os.path.exists(rec_cache_file):
+            logging.info(f"Loading recommendation cache from {recommendation_cache_path}")
+            try:
+                with shelve.open(recommendation_cache_path) as shelf:
+                    logging.info(f"Recommendation cache file opened, contains {len(shelf.keys())} keys")
+                    for key in shelf.keys():
+                        # Convert back from dict to DataFrame
+                        rec_dict = shelf[key]
+                        if 'dataframe' in rec_dict:
+                            recommendation_cache[key] = pd.DataFrame.from_records(rec_dict['dataframe'])
+                        else:
+                            recommendation_cache[key] = rec_dict
+                        logging.info(f"Loaded recommendation cache entry for key: {key}")
+                logging.info(f"Successfully loaded {len(recommendation_cache)} items from recommendation cache")
+            except Exception as shelf_error:
+                logging.error(f"Shelve error while opening recommendation cache: {str(shelf_error)}")
+                logging.error(traceback.format_exc())
+                logging.info("Will try to load from JSON backups instead")
+                
+                # Try to load from JSON backups
+                try:
+                    json_pattern = os.path.join(cache_dir, "recommendation_cache_*.json")
+                    json_files = glob.glob(json_pattern)
+                    if json_files:
+                        logging.info(f"Found {len(json_files)} JSON backup files for recommendation cache")
+                        for json_file in json_files:
+                            try:
+                                # Extract movie title from filename
+                                file_basename = os.path.basename(json_file)
+                                movie_title = file_basename.replace("recommendation_cache_", "").replace(".json", "").replace("_", " ")
+                                
+                                with open(json_file, 'r') as f:
+                                    rec_data = json.load(f)
+                                    if 'dataframe' in rec_data:
+                                        recommendation_cache[movie_title] = pd.DataFrame.from_records(rec_data['dataframe'])
+                                        logging.info(f"Loaded recommendation cache for '{movie_title}' from JSON backup")
+                            except Exception as json_error:
+                                logging.error(f"Error loading recommendation from JSON {json_file}: {str(json_error)}")
+                    else:
+                        logging.info("No JSON backup files found for recommendation cache")
+                except Exception as glob_error:
+                    logging.error(f"Error looking for JSON backups: {str(glob_error)}")
+        else:
+            logging.info(f"No persistent recommendation cache found at {rec_cache_file}, starting with empty cache")
+            
+            # Check if the supporting files exist but the .db doesn't
+            if os.path.exists(f"{recommendation_cache_path}.dat") or os.path.exists(f"{recommendation_cache_path}.dir"):
+                logging.warning(f"Found recommendation cache supporting files but no .db file - this might indicate an issue with shelve")
+            
+            # Try to load from JSON backups even if no shelve file exists
+            try:
+                json_pattern = os.path.join(cache_dir, "recommendation_cache_*.json")
+                json_files = glob.glob(json_pattern)
+                if json_files:
+                    logging.info(f"Found {len(json_files)} JSON backup files for recommendation cache")
+                    for json_file in json_files:
+                        try:
+                            # Extract movie title from filename
+                            file_basename = os.path.basename(json_file)
+                            movie_title = file_basename.replace("recommendation_cache_", "").replace(".json", "").replace("_", " ")
+                            
+                            with open(json_file, 'r') as f:
+                                rec_data = json.load(f)
+                                if 'dataframe' in rec_data:
+                                    recommendation_cache[movie_title] = pd.DataFrame.from_records(rec_data['dataframe'])
+                                    logging.info(f"Loaded recommendation cache for '{movie_title}' from JSON backup")
+                        except Exception as json_error:
+                            logging.error(f"Error loading recommendation from JSON {json_file}: {str(json_error)}")
+                else:
+                    logging.info("No JSON backup files found for recommendation cache")
+            except Exception as glob_error:
+                logging.error(f"Error looking for JSON backups: {str(glob_error)}")
+    except Exception as e:
+        logging.error(f"Error loading recommendation cache: {str(e)}")
+        logging.error(traceback.format_exc())
+        logging.info("Starting with empty recommendation cache")      # Load genre search cache
+    try:
+        genre_cache_file = f"{genre_cache_path}.db"
+        if os.path.exists(genre_cache_file):
+            logging.info(f"Loading genre search cache from {genre_cache_path}")
+            try:
+                with shelve.open(genre_cache_path) as shelf:
+                    logging.info(f"Genre cache file opened, contains {len(shelf.keys())} keys")
+                    shelf_keys = list(shelf.keys())
+                    logging.info(f"Genre cache keys: {shelf_keys}")
+                    for key in shelf_keys:
+                        genre_search_cache[key] = shelf[key]
+                        logging.info(f"Loaded genre cache entry for key: {key}")
+                logging.info(f"Successfully loaded {len(genre_search_cache)} items from genre search cache")
+            except Exception as shelf_error:
+                logging.error(f"Shelve error while opening genre cache: {str(shelf_error)}")
+                logging.error(traceback.format_exc())
+                logging.info("Will try to load from JSON backups instead")
+                
+                # Try to load from JSON backups
+                try:
+                    json_pattern = os.path.join(cache_dir, "genre_cache_*.json")
+                    json_files = glob.glob(json_pattern)
+                    if json_files:
+                        logging.info(f"Found {len(json_files)} JSON backup files for genre cache")
+                        for json_file in json_files:
+                            try:
+                                # Extract cache key from filename
+                                file_basename = os.path.basename(json_file)
+                                cache_key = file_basename.replace("genre_cache_", "").replace(".json", "")
+                                
+                                with open(json_file, 'r') as f:
+                                    genre_search_cache[cache_key] = json.load(f)
+                                    logging.info(f"Loaded genre search cache for '{cache_key}' from JSON backup")
+                            except Exception as json_error:
+                                logging.error(f"Error loading genre cache from JSON {json_file}: {str(json_error)}")
+                    else:
+                        logging.info("No JSON backup files found for genre cache")
+                except Exception as glob_error:
+                    logging.error(f"Error looking for JSON backups: {str(glob_error)}")
+        else:
+            logging.info(f"No persistent genre cache found at {genre_cache_file}, starting with empty cache")
+            # Check if the .dat and .dir files exist but .db doesn't
+            if os.path.exists(f"{genre_cache_path}.dat") or os.path.exists(f"{genre_cache_path}.dir"):
+                logging.warning(f"Found genre cache supporting files but no .db file - this might indicate an issue with shelve")
+            
+            # Try to load from JSON backups even if no shelve file exists
+            try:
+                json_pattern = os.path.join(cache_dir, "genre_cache_*.json")
+                json_files = glob.glob(json_pattern)
+                if json_files:
+                    logging.info(f"Found {len(json_files)} JSON backup files for genre cache")
+                    for json_file in json_files:
+                        try:
+                            # Extract cache key from filename
+                            file_basename = os.path.basename(json_file)
+                            cache_key = file_basename.replace("genre_cache_", "").replace(".json", "")
+                            
+                            with open(json_file, 'r') as f:
+                                genre_search_cache[cache_key] = json.load(f)
+                                logging.info(f"Loaded genre search cache for '{cache_key}' from JSON backup")
+                        except Exception as json_error:
+                            logging.error(f"Error loading genre cache from JSON {json_file}: {str(json_error)}")
+                else:
+                    logging.info("No JSON backup files found for genre cache")
+            except Exception as glob_error:
+                logging.error(f"Error looking for JSON backups: {str(glob_error)}")
+    except Exception as e:
+        logging.error(f"Error loading genre search cache: {str(e)}")
+        logging.error(traceback.format_exc())
+        logging.info("Starting with empty genre search cache")
+        logging.error(traceback.format_exc())
+        logging.info("Starting with empty genre search cache")
+
+# Function to save recommendation cache to disk
+def save_recommendation_cache(movie_title):
+    """Save the recommendation cache entry for a specific movie to disk"""
+    logging.info(f"save_recommendation_cache called for title: {movie_title}")
+    
+    if movie_title not in recommendation_cache:
+        logging.warning(f"Cannot save recommendation cache for {movie_title} - not in cache")
+        return
+    
+    try:
+        # Ensure cache directory exists
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Convert DataFrame to dict for easier serialization
+        recommendations_df = recommendation_cache[movie_title]
+        recommendations_dict = {
+            'dataframe': recommendations_df.to_dict(orient='records')
+        }
+        
+        # Try JSON as a backup in case shelve has issues
+        try:
+            json_path = os.path.join(cache_dir, f"recommendation_cache_{movie_title.replace(' ', '_')}.json")
+            with open(json_path, 'w') as f:
+                json.dump(recommendations_dict, f)
+            logging.info(f"Saved recommendation cache as JSON backup at {json_path}")
+        except Exception as json_error:
+            logging.warning(f"Could not save JSON backup: {str(json_error)}")
+        
+        # Now try shelve
+        try:
+            with shelve.open(recommendation_cache_path) as shelf:
+                shelf[movie_title] = recommendations_dict
+                logging.info(f"Saved recommendation cache for '{movie_title}' to disk, total keys in shelf: {len(shelf.keys())}")
+                shelf_keys = list(shelf.keys())
+                logging.info(f"Current shelf keys: {shelf_keys}")
+            
+            # Check if the files were created
+            db_exists = os.path.exists(f"{recommendation_cache_path}.db")
+            dat_exists = os.path.exists(f"{recommendation_cache_path}.dat")
+            dir_exists = os.path.exists(f"{recommendation_cache_path}.dir")
+            logging.info(f"After saving, cache files: .db exists: {db_exists}, .dat exists: {dat_exists}, .dir exists: {dir_exists}")
+        except Exception as shelf_error:
+            logging.error(f"Shelve error: {str(shelf_error)}")
+            logging.error(traceback.format_exc())
+    except Exception as e:
+        logging.error(f"Error saving recommendation cache to disk: {str(e)}")
+        logging.error(traceback.format_exc())
+
+# Function to save genre search cache to disk
+def save_genre_cache(cache_key):
+    """Save the genre search cache entry for a specific key to disk"""
+    logging.info(f"save_genre_cache called for key: {cache_key}")
+    
+    if cache_key not in genre_search_cache:
+        logging.warning(f"Cannot save genre cache for {cache_key} - not in cache")
+        return
+    
+    try:
+        # Ensure cache directory exists
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # Get the cache result - it's already a dict with the structure
+        # { "movies": [...], "total_count": N, "genre": "...", "is_fallback": bool, "processing_time_seconds": X }
+        result = genre_search_cache[cache_key]
+        logging.info(f"Saving genre cache for key: {cache_key}, result type: {type(result)}")
+        
+        # Try JSON as a backup in case shelve has issues
+        try:
+            json_path = os.path.join(cache_dir, f"genre_cache_{cache_key}.json")
+            with open(json_path, 'w') as f:
+                json.dump(result, f)
+            logging.info(f"Saved genre cache as JSON backup at {json_path}")
+        except Exception as json_error:
+            logging.warning(f"Could not save JSON backup: {str(json_error)}")
+        
+        # Now try shelve
+        try:
+            with shelve.open(genre_cache_path) as shelf:
+                shelf[cache_key] = result
+                logging.info(f"Saved genre cache for '{cache_key}' to disk, total keys in shelf: {len(shelf.keys())}")
+                shelf_keys = list(shelf.keys())
+                logging.info(f"Current shelf keys: {shelf_keys}")
+            
+            # Check if the files were created
+            db_exists = os.path.exists(f"{genre_cache_path}.db")
+            dat_exists = os.path.exists(f"{genre_cache_path}.dat")
+            dir_exists = os.path.exists(f"{genre_cache_path}.dir")
+            logging.info(f"After saving, cache files: .db exists: {db_exists}, .dat exists: {dat_exists}, .dir exists: {dir_exists}")
+        except Exception as shelf_error:
+            logging.error(f"Shelve error: {str(shelf_error)}")
+            logging.error(traceback.format_exc())
+    except Exception as e:
+        logging.error(f"Error saving genre cache to disk: {str(e)}")
+        logging.error(traceback.format_exc())
+
+# Function to clear all persistent caches
+def clear_persistent_caches():
+    """Remove all persistent cache files from disk"""
+    try:
+        # Ensure we have the cache directory
+        if not os.path.exists(cache_dir):
+            logging.info(f"Cache directory {cache_dir} doesn't exist, nothing to clear")
+            return
+            
+        # Check for and remove shelve files
+        for ext in ['.db', '.dat', '.bak', '.dir']:
+            rec_file = f"{recommendation_cache_path}{ext}"
+            if os.path.exists(rec_file):
+                os.remove(rec_file)
+                logging.info(f"Removed recommendation cache file: {rec_file}")
+            
+            genre_file = f"{genre_cache_path}{ext}"
+            if os.path.exists(genre_file):
+                os.remove(genre_file)
+                logging.info(f"Removed genre cache file: {genre_file}")
+        
+        # Also clear any JSON backup files
+        for filename in os.listdir(cache_dir):
+            if filename.startswith("genre_cache_") or filename.startswith("recommendation_cache_"):
+                if filename.endswith(".json"):
+                    json_path = os.path.join(cache_dir, filename)
+                    os.remove(json_path)
+                    logging.info(f"Removed JSON cache file: {json_path}")
+        
+        logging.info("All persistent cache files cleared")
+    except Exception as e:
+        logging.error(f"Error clearing persistent caches: {str(e)}")
+        logging.error(traceback.format_exc())
 
 try:
     # Check for cached preprocessed data first
@@ -269,46 +590,72 @@ indices_loaded = False
 # Only try to load cache if we're not in fast startup mode (which uses a subset of data)
 if not FAST_STARTUP and os.path.exists(indices_pickle_path):
     try:
-        logging.info(f"Attempting to load cached indices from {indices_pickle_path}")
-        with open(indices_pickle_path, 'rb') as f:
-            cached_indices = pickle.load(f)
+        import threading
+        
+        # Create a timeout exception for handling stuck operations
+        class TimeoutException(Exception):
+            pass
             
-            # Verify the cache is compatible with our current dataset
-            if ('df_rows' in cached_indices and 
-                'title_index' in cached_indices and 
-                'title_without_year_index' in cached_indices and
-                'title_words_index' in cached_indices and 
-                'genre_index' in cached_indices and
-                cached_indices['df_rows'] == len(df)):
+        # Function to load the cached indices
+        def load_indices_with_timeout():
+            # Use global variables
+            global title_index, title_without_year_index, title_words_index, genre_index
+            global indices_loaded
+            
+            try:
+                logging.info(f"Attempting to load cached indices from {indices_pickle_path}")
+                start_time = time.time()
                 
-                # Cache is valid, use it
-                title_index = cached_indices['title_index']
-                title_without_year_index = cached_indices['title_without_year_index']
-                title_words_index = cached_indices['title_words_index']
-                genre_index = cached_indices['genre_index']
-                  # Get counts for logging
-                unique_titles = set()
-                for titles in title_index.values():
-                    for idx in titles:
-                        try:
-                            # Check if the index is valid
-                            if idx >= 0 and idx < len(df):
-                                title = df.iloc[idx]['title']
-                                # Make sure title is a string before calling lower()
-                                if isinstance(title, str):
-                                    unique_titles.add(title.lower())
-                                else:
-                                    # Convert non-string titles to string
-                                    unique_titles.add(str(title).lower())
-                        except Exception as title_error:
-                            logging.warning(f"Error adding title at index {idx} to unique titles set: {str(title_error)}")
+                with open(indices_pickle_path, 'rb') as f:
+                    cached_indices = pickle.load(f)
                 
-                unique_genres = set(genre_index.keys())
+                load_time = time.time() - start_time
+                logging.info(f"Raw indices loaded in {load_time:.2f} seconds, validating...")
                 
-                logging.info(f"Successfully loaded cached indices for {len(unique_titles)} titles and {len(unique_genres)} genres")
-                indices_loaded = True
-            else:
-                logging.info("Cached indices not compatible with current dataset, rebuilding...")
+                # Verify the cache is compatible with our current dataset
+                if ('df_rows' in cached_indices and 
+                    'title_index' in cached_indices and 
+                    'title_without_year_index' in cached_indices and
+                    'title_words_index' in cached_indices and 
+                    'genre_index' in cached_indices):
+                    
+                    # Get the indices
+                    title_index = cached_indices['title_index']
+                    title_without_year_index = cached_indices['title_without_year_index']
+                    title_words_index = cached_indices['title_words_index']
+                    genre_index = cached_indices['genre_index']
+                    
+                    # Check if the indices have content
+                    if (len(title_index) > 0 and len(genre_index) > 0):
+                        # If the row count doesn't match exactly, log a warning but continue
+                        if cached_indices['df_rows'] != len(df):
+                            logging.warning(f"Cached indices were built for {cached_indices['df_rows']} rows, but current dataset has {len(df)} rows. Using anyway.")
+                        
+                        # Log success
+                        logging.info(f"Successfully loaded cached indices with {len(title_index)} titles and {len(genre_index)} genres in {load_time:.2f} seconds")
+                        indices_loaded = True
+                    else:
+                        logging.warning("Cached indices appear to be empty, rebuilding...")
+                else:
+                    logging.info("Cached indices not compatible with current dataset, rebuilding...")
+            except Exception as e:
+                logging.error(f"Error loading cached indices: {str(e)}")
+                logging.info("Will rebuild indices from scratch")
+        
+        # Create and start the thread
+        load_thread = threading.Thread(target=load_indices_with_timeout)
+        load_thread.daemon = True
+        load_thread.start()
+        
+        # Wait for the thread with a timeout
+        timeout_seconds = 30  # Timeout after 30 seconds
+        load_thread.join(timeout_seconds)
+        
+        if load_thread.is_alive():
+            logging.error(f"Timeout while loading cached indices after {timeout_seconds} seconds")
+            # Thread is still running, we need to abandon it
+            indices_loaded = False
+            # Continue execution
     except Exception as e:
         logging.error(f"Error loading cached indices: {str(e)}")
         logging.info("Will rebuild indices from scratch")
@@ -380,22 +727,41 @@ if not indices_loaded:
 
     logging.info(f"Indexed {len(unique_titles)} unique titles and {len(unique_genres)} unique genres")
     logging.info(f"Created {len(title_index)} full title entries, {len(title_without_year_index)} title-without-year entries, and {len(title_words_index)} word entries")
-    logging.info(f"Created {len(genre_index)} genre entries")
-
-    # Save indices to cache (but only if not in FAST_STARTUP mode which uses a subset)
+    logging.info(f"Created {len(genre_index)} genre entries")    # Save indices to cache (but only if not in FAST_STARTUP mode which uses a subset)
     if not FAST_STARTUP:
         try:
             import pickle
             logging.info(f"Saving indices to cache file: {indices_pickle_path}")
-            with open(indices_pickle_path, 'wb') as f:
+            
+            # Calculate total entries for logging
+            total_entries = len(title_index) + len(title_without_year_index) + len(title_words_index) + len(genre_index)
+            logging.info(f"Preparing to save {total_entries} total index entries to cache")
+            
+            # Save to a temporary file first to avoid corruption if the process is interrupted
+            temp_path = indices_pickle_path + '.temp'
+            start_time = time.time()
+            
+            with open(temp_path, 'wb') as f:
                 pickle.dump({
                     'df_rows': len(df),
                     'title_index': title_index,
                     'title_without_year_index': title_without_year_index,
                     'title_words_index': title_words_index,
                     'genre_index': genre_index
-                }, f)
-            logging.info("Indices cache saved successfully")
+                }, f, protocol=pickle.HIGHEST_PROTOCOL)
+            
+            # Rename the temp file to the final filename
+            if os.path.exists(indices_pickle_path):
+                # Backup the old file first
+                backup_path = indices_pickle_path + '.bak'
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+                os.rename(indices_pickle_path, backup_path)
+                
+            os.rename(temp_path, indices_pickle_path)
+            
+            save_time = time.time() - start_time
+            logging.info(f"Indices cache saved successfully in {save_time:.2f} seconds")
         except Exception as e:
             logging.error(f"Failed to save indices cache: {str(e)}")
 else:
@@ -526,8 +892,8 @@ def recommend_movies(title, df, X_scaled=None, n_recommendations=10):
                         if search_title in movie_title:
                             movie_indices.append(idx)
             
-            # If we still didn't find matches, do a more comprehensive search
-            if not movie_indices:
+            # If not enough matches, fall back to broader search
+            if len(movie_indices) < 1:
                 logging.info(f"No quick matches found, performing comprehensive search for: {search_title}")
                 for t, indices in title_index.items():
                     if search_title in t:
@@ -637,11 +1003,12 @@ def recommend_movies(title, df, X_scaled=None, n_recommendations=10):
                     cluster_id = movie['cluster']
                     cluster_indices = df[df['cluster'] == cluster_id].index.tolist()
                     indices_to_use.extend(cluster_indices[:min(10000, len(cluster_indices))])
-                    
-                    # Add movies with matching genres
+                      # Add movies with matching genres
                     if original_genres and len(original_genres) > 0:
                         for genre in original_genres:
-                            genre_indices = df[df['genres'].astype(str).str.contains(genre, na=False)].index.tolist()
+                            # Escape special regex characters in genre name
+                            escaped_genre = re.escape(genre)
+                            genre_indices = df[df['genres'].astype(str).str.contains(escaped_genre, na=False, regex=True)].index.tolist()
                             indices_to_use.extend(genre_indices[:min(10000, len(genre_indices))])
                     
                     # Add some random movies to ensure diversity
@@ -708,8 +1075,7 @@ def recommend_movies(title, df, X_scaled=None, n_recommendations=10):
         
         # Exclude the requested movie
         cluster_movies = cluster_movies[cluster_movies['title'] != movie['title']]
-        
-        # Sort by rating if available
+          # Sort by rating if available
         if 'rating' in cluster_movies:
             cluster_movies = cluster_movies.sort_values('rating', ascending=False)
         
@@ -736,6 +1102,9 @@ def recommend_movies(title, df, X_scaled=None, n_recommendations=10):
         
         # Cache the recommendations for future use
         recommendation_cache[title] = recommendations
+        
+        # Save to persistent cache
+        save_recommendation_cache(title)
         
         return recommendations
         
@@ -872,14 +1241,42 @@ def api_status():
 
 @app.route("/clear-cache", methods=["POST", "GET"])
 def clear_cache():
-    """Clear the recommendation cache"""
-    global recommendation_cache
-    cache_size_before = len(recommendation_cache)
+    """Clear the recommendation cache and genre search cache"""
+    global recommendation_cache, genre_search_cache
+    
+    # Clear global caches
+    rec_cache_size_before = len(recommendation_cache)
+    genre_cache_size_before = len(genre_search_cache)
+    
     recommendation_cache = {}
-    logging.info(f"Recommendation cache cleared. {cache_size_before} entries removed.")
+    genre_search_cache = {}
+    
+    # Clear application context caches if they exist
+    app_rec_cache_size = 0
+    app_genre_cache_size = 0
+    
+    if hasattr(app, 'recommendation_cache'):
+        app_rec_cache_size = len(app.recommendation_cache)
+        app.recommendation_cache = {}
+        
+    if hasattr(app, 'genre_search_cache'):
+        app_genre_cache_size = len(app.genre_search_cache)
+        app.genre_search_cache = {}
+    
+    logging.info(f"Global recommendation cache cleared: {rec_cache_size_before} entries removed")
+    logging.info(f"Global genre search cache cleared: {genre_cache_size_before} entries removed")
+    logging.info(f"App recommendation cache cleared: {app_rec_cache_size} entries removed")
+    logging.info(f"App genre search cache cleared: {app_genre_cache_size} entries removed")
+    
+    # Clear persistent caches on demand
+    try:
+        clear_persistent_caches()
+    except Exception as e:
+        logging.error(f"Error clearing persistent caches: {str(e)}")
+    
     return jsonify({
         "status": "success",
-        "message": f"Cache cleared. {cache_size_before} entries removed."
+        "message": f"All caches cleared. Total entries removed: {rec_cache_size_before + genre_cache_size_before + app_rec_cache_size + app_genre_cache_size}"
     })
     
 @app.route("/")
@@ -1350,6 +1747,19 @@ def movies_by_genre():
     """Return movies filtered by genre"""
     start_time = datetime.datetime.now()
     
+    # Debug - check if cache is persisting between requests
+    global genre_search_cache
+    logging.info(f"START OF REQUEST: global genre_search_cache type: {type(genre_search_cache)}, id: {id(genre_search_cache)}")
+    
+    # Use the application context cache
+    if hasattr(app, 'genre_search_cache'):
+        app_cache = app.genre_search_cache
+        logging.info(f"Using app.genre_search_cache: {len(app_cache)} entries, id: {id(app_cache)}")
+    else:
+        app.genre_search_cache = {}
+        app_cache = app.genre_search_cache
+        logging.info("Created new app.genre_search_cache")
+    
     # Get parameters
     genre = request.args.get("genre", "")
     limit_str = request.args.get("limit", "10")
@@ -1367,12 +1777,26 @@ def movies_by_genre():
             "processing_time_seconds": (datetime.datetime.now() - start_time).total_seconds()
         })
     
+    # Check cache for genre search
+    cache_key = f"genre_{genre.lower()}_{limit}"
+    logging.info(f"Cache key: {cache_key}")
+    logging.info(f"App cache keys available: {list(app_cache.keys())}")
+    
+    if cache_key in app_cache:
+        logging.info(f"APP CACHE HIT! Using cached results for genre: {genre}, limit: {limit}")
+        cached_result = app_cache[cache_key]
+        
+        # Add processing time to the cached result
+        cached_result["processing_time_seconds"] = (datetime.datetime.now() - start_time).total_seconds()
+        cached_result["from_cache"] = True
+        
+        return jsonify(cached_result)
+    
     try:
         # Filter movies by genre
-        # Create a case-insensitive search for the genre in the genres column
-        # Special handling for Sci-Fi which might be stored as "Sci-Fi" or "SciFi"
+        # Create a case-insensitive search for the genre in the genres column        # Special handling for Sci-Fi which might be stored as "Sci-Fi" or "SciFi"
         if genre.lower() == 'sci-fi':
-            filtered_movies = df[df['genres'].str.lower().str.contains('sci-fi', case=False, na=False) | 
+            filtered_movies = df[df['genres'].str.lower().str.contains('sci\\-fi', case=False, na=False, regex=True) | 
                                 df['genres'].str.lower().str.contains('scifi', case=False, na=False)]
         else:
             filtered_movies = df[df['genres'].str.contains(genre, case=False, na=False)]
@@ -1417,15 +1841,24 @@ def movies_by_genre():
         
         # Calculate processing time
         processing_time = (datetime.datetime.now() - start_time).total_seconds()
-        
-        # Return results
-        return jsonify({
+          # Create result object
+        result = {
             "movies": movies_list,
             "total_count": total_count,
             "genre": genre,
-            "is_fallback": is_fallback,
-            "processing_time_seconds": processing_time
-        })
+            "is_fallback": is_fallback,            "processing_time_seconds": processing_time
+        }        # Cache the result in both caches for compatibility
+        genre_search_cache[cache_key] = result  # Global cache (kept for compatibility)
+        app_cache[cache_key] = result  # Application context cache
+        
+        # Save to persistent cache
+        save_genre_cache(cache_key)
+        
+        logging.info(f"APP CACHE STORE: Cached results for genre: {genre}, limit: {limit}")
+        logging.info(f"App cache now contains {len(app_cache)} entries with id: {id(app_cache)}")
+        
+        # Return results
+        return jsonify(result)
     
     except Exception as e:
         logging.error(f"Error in movies-by-genre endpoint: {str(e)}")
@@ -1509,7 +1942,9 @@ def get_additional_recommendations(recommendations, movie, original_genres, n_re
     if original_genres and len(original_genres) > 0:
         genre_filter = None
         for genre in original_genres:
-            condition = df['genres'].astype(str).str.contains(genre, na=False)
+            # Escape special regex characters in genre name
+            escaped_genre = re.escape(genre)
+            condition = df['genres'].astype(str).str.contains(escaped_genre, na=False, regex=True)
             if genre_filter is None:
                 genre_filter = condition
             else:
@@ -1548,6 +1983,16 @@ def get_additional_recommendations(recommendations, movie, original_genres, n_re
     return recommendations
 
 if __name__ == "__main__":
+    # Debug the cache variables at startup
+    logging.info(f"AT STARTUP: genre_search_cache type: {type(genre_search_cache)}, id: {id(genre_search_cache)}")
+    logging.info(f"AT STARTUP: recommendation_cache type: {type(recommendation_cache)}, id: {id(recommendation_cache)}")
+      
+    # Load persistent caches
+    logging.info("Loading persistent caches from disk")
+    load_persistent_caches()
+    logging.info(f"After loading: recommendation_cache has {len(recommendation_cache)} entries")
+    logging.info(f"After loading: genre_search_cache has {len(genre_search_cache)} entries")
+    
     # Always use port 3000
     try:
         logging.info(f"Starting server on port {SERVER_PORT}")
@@ -1556,4 +2001,3 @@ if __name__ == "__main__":
     except Exception as port_error:
         logging.critical(f"Could not start server on port {SERVER_PORT}: {str(port_error)}")
         print(f"Error: Port {SERVER_PORT} is in use. Please close any applications using this port and try again.")
-
