@@ -1,9 +1,9 @@
-# Movie Recommendation System
+# Movie-Reccomendation-Website-With-K-Means
 
 A full-stack movie recommendation web application with content-based and cluster-based recommendation algorithms.
 
 ![Movie Recommendation System](https://img.shields.io/badge/Status-Active-brightgreen)
-![Version](https://img.shields.io/badge/Version-1.1.0-blue)
+![Version](https://img.shields.io/badge/Version-1.2.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![Flask](https://img.shields.io/badge/Flask-2.0+-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
@@ -25,20 +25,32 @@ This project is a movie recommendation system that suggests movies based on user
 
 ## 🔄 Recent Updates
 
-### Performance Optimizations
-- **Persistent Caching**: Added file-based caching for processed dataframe (`df_cache.pkl`) and lookup indices (`indices_cache.pkl`)
+### Performance Optimizations (v1.2.0)
+- **Enhanced Persistent Caching**: 
+  - Added dedicated `cache/` directory for persistent cache files
+  - Implemented shelve-based persistent caching for recommendations and genre queries
+  - Added JSON fallback for cache entries when shelve operations fail
+  - Cache now survives server restarts with improved data persistence
 - **Fast Lookup Indices**: Implemented multi-tier search with specialized indices for titles, titles without years, and word matching
 - **Batch Processing**: Added batch processing for index building to reduce memory usage with large datasets
 - **Annoy Integration**: Added approximate nearest-neighbor search with lazy loading and timeout protection
 
+### Bug Fixes
+- **Regex Error Handling**: Fixed "bad character range" errors in genre regex by properly escaping special characters
+- **Variable Scope**: Resolved "local variable referenced before assignment" issues in recommendation logic
+- **Cache Directory Management**: Added automatic creation of cache directories with proper permissions
+- **Error Recovery**: Improved error handling with detailed logging and graceful fallbacks
+
 ### Feature Flags
 - **ENABLE_ANNOY**: Toggle expensive Annoy-based recommendation features
 - **ENABLE_CONTENT_BASED**: Control content-based recommendation algorithms
+  - Useful to disable on systems with limited memory (< 16GB)
+  - System will automatically fall back to cluster-based recommendations on memory errors
 - **FAST_STARTUP**: Run in development mode with `--fast` flag to load only a subset of data
 
 ### Search Improvements
 - **Multi-Strategy Search**: Enhanced title matching with hierarchical fallback strategies
-- **Smart Caching**: Improved in-memory caching for recommendations and genre searches
+- **Smart Caching**: Improved in-memory and persistent caching for recommendations and genre searches
 - **Fallback Mechanisms**: Graceful degradation with timeout protection and multiple fallback methods
 
 ### API Enhancements
@@ -72,15 +84,15 @@ The system uses three main datasets:
 ### Prerequisites
 - Python 3.10 or higher
 - Sufficient RAM (16GB+ recommended for optimal performance)
+  - For smaller systems, use the `--fast` flag to reduce memory requirements
+  - System will automatically fall back to less memory-intensive algorithms if needed
 - Git
 
 ### Clone the Repository
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system.git
-cd movie-recommendation-system
+git clone https://github.com/Deepanshu-Pahwa/Movie-Reccomendation-Website-With-K-Means.git
+cd Movie-Reccomendation-Website-With-K-Means
 ```
-
-> **Note:** When publishing to GitHub, replace `YOUR_GITHUB_USERNAME` with your actual GitHub username (e.g., `johnsmith`). People cloning your repository will use this updated URL.
 
 ### Install Dependencies
 ```bash
@@ -111,17 +123,44 @@ The application will be available at http://localhost:3000
 ## 🔍 API Endpoints
 
 - `/search`: Search for movies by title or get recommendations
-- `/recommend`: Get movie recommendations based on a title
+- `/recommend`: Get movie recommendations based on a title (with persistent caching)
+- `/movies-by-genre`: Get movies filtered by genre (with persistent caching)
 - `/movie-details`: Get detailed information about a movie
 - `/api-status`: Check API status
-- `/clear-cache`: Clear the recommendation cache
+- `/clear-cache`: Clear the in-memory recommendation cache
+- `/clear-persistent-caches`: Clear all persistent cache files (shelve and JSON)
 
 ## ⚙️ Performance Considerations
 
-- The application uses advanced caching techniques to improve response times
+- **Multi-level Caching System**:
+  - Memory caching for fast, frequent queries
+  - Persistent disk-based caching (shelve) for recommendations and genre queries
+  - JSON backup files for cache data redundancy
+  - Automatic cache directory creation and management
 - Timeout mechanisms prevent long-running operations
 - Vectorized operations and efficient filtering for large dataset handling
 - Boolean indexing and sampling techniques for improved performance
+- Regex optimization with proper escape handling for special characters
+- **Memory Management**:
+  - Graceful fallbacks when memory-intensive operations fail
+  - Automatic switch to cluster-based recommendations if content-based filtering exceeds memory limits
+  - Memory error handling for large matrix operations (especially with 25M+ rows)
+  - Configurable via feature flags to adapt to available system resources
+
+## 🔒 Caching Architecture
+
+The system implements a sophisticated caching strategy:
+
+1. **In-memory Caching**: Fastest access for recent queries
+2. **Persistent Caching**:
+   - Uses Python's `shelve` module for dictionary-like persistent storage
+   - Maintains separate files for genre and recommendation caches
+   - Creates JSON backups for each cache entry as fallback
+   - Cache files persist across server restarts
+3. **Cache Management**:
+   - Clear in-memory cache via `/clear-cache` endpoint
+   - Clear persistent caches via `/clear-persistent-caches` endpoint
+   - Automatic cache validation and error recovery
 
 ## 📁 Project Structure
 
@@ -134,13 +173,18 @@ The application will be available at http://localhost:3000
 ├── index.html                   # Home page
 ├── search-results.html          # Search results page
 ├── styles.css                   # Main CSS styles
+├── cache/                       # Persistent cache directory
+│   ├── genre_cache_*.json       # JSON backup for genre cache
+│   ├── genre_cache_*.db         # Shelve-based genre cache
+│   ├── recommendation_cache_*.json  # JSON backup for recommendation cache
+│   └── recommendation_cache_*.db    # Shelve-based recommendation cache
 ├── static/                      # Static assets
 │   ├── css/                     # CSS files
 │   └── js/                      # JavaScript files
 └── activity_log_*.log           # Activity logs
 ```
 
-> **Note:** Cache files (`df_cache.pkl` and `indices_cache.pkl`) will be generated automatically when you run the application for the first time. These files significantly improve startup time on subsequent runs and should not be committed to version control.
+> **Note:** Cache files (`df_cache.pkl` and `indices_cache.pkl`) will be generated automatically when you run the application for the first time. Additionally, persistent cache files for recommendations and genres will be created in the `cache/` directory. These files significantly improve startup time and query performance on subsequent runs and should not be committed to version control.
 
 ## 🤝 Contributing
 
@@ -164,6 +208,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 
 
-Project Link: [https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system](https://github.com/YOUR_GITHUB_USERNAME/movie-recommendation-system)
-
-> **Note:** When publishing to GitHub, replace `YOUR_GITHUB_USERNAME` with your actual GitHub username.
+Project Link: [https://github.com/Deepanshu-Pahwa/Movie-Reccomendation-Website-With-K-Means](https://github.com/Deepanshu-Pahwa/Movie-Reccomendation-Website-With-K-Means)
